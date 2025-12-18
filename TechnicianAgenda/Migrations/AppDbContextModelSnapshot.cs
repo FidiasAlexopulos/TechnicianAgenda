@@ -99,7 +99,7 @@ namespace TechnicianAgenda.Migrations
                     b.HasOne("TechnicianAgenda.Models.Client", "Client")
                         .WithMany("Directions")
                         .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Client");
@@ -110,13 +110,13 @@ namespace TechnicianAgenda.Migrations
                     b.HasOne("TechnicianAgenda.Models.Client", "Client")
                         .WithMany()
                         .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("TechnicianAgenda.Models.Direction", "Direction")
                         .WithMany()
                         .HasForeignKey("DirectionId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Client");

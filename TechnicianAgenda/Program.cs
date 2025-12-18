@@ -1,6 +1,9 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using TechnicianAgenda.Data;
 using TechnicianAgenda.Models;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,9 +12,24 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddSwaggerGen();
+
+// Add this to fix the infinite loop
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+});
+
 // Add database
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Add Redis caching
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = "localhost:6379";
+    options.InstanceName = "TechnicianAgenda_";
+});
 
 var app = builder.Build();
 
@@ -82,12 +100,42 @@ app.MapPost("/api/directions", async (Direction direction, AppDbContext db) =>
 // ============================================
 
 // Get all work orders
-app.MapGet("/api/works", async (AppDbContext db) =>
+// Get all work orders (with caching)
+// Get all work orders (with caching)
+app.MapGet("/api/works", async (AppDbContext db, IDistributedCache cache, ILogger<Program> logger) =>
 {
+    var cacheKey = "all_works";
+
+    // Define JSON options once for the whole method
+    var jsonOptions = new JsonSerializerOptions
+    {
+        ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+    };
+
+    // Try to get from cache first
+    var cachedData = await cache.GetStringAsync(cacheKey);
+
+    if (!string.IsNullOrEmpty(cachedData))
+    {
+        logger.LogInformation("✅ Returning data from CACHE!");
+        var cachedWorks = JsonSerializer.Deserialize<List<Work>>(cachedData, jsonOptions);
+        return Results.Ok(cachedWorks);
+    }
+
+    // If not in cache, get from database
+    logger.LogInformation("📊 Fetching from DATABASE...");
     var works = await db.Works
         .Include(w => w.Client)
         .Include(w => w.Direction)
         .ToListAsync();
+
+    // Store in cache for 5 minutes
+    var serializedData = JsonSerializer.Serialize(works, jsonOptions);
+    var cacheOptions = new DistributedCacheEntryOptions
+    {
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+    };
+    await cache.SetStringAsync(cacheKey, serializedData, cacheOptions);
 
     return Results.Ok(works);
 });
@@ -104,16 +152,15 @@ app.MapGet("/api/works/{id}", async (int id, AppDbContext db) =>
 });
 
 // Create a new work order
-app.MapPost("/api/works", async (Work work, AppDbContext db) =>
+// Create a new work order (and clear cache)
+app.MapPost("/api/works", async (Work work, AppDbContext db, IDistributedCache cache) =>
 {
-    // Validate client exists
     var clientExists = await db.Clients.AnyAsync(c => c.Id == work.ClientId);
     if (!clientExists)
     {
         return Results.BadRequest("Client not found");
     }
 
-    // Validate direction exists and belongs to the client
     var direction = await db.Directions
         .FirstOrDefaultAsync(d => d.Id == work.DirectionId && d.ClientId == work.ClientId);
 
@@ -124,6 +171,11 @@ app.MapPost("/api/works", async (Work work, AppDbContext db) =>
 
     db.Works.Add(work);
     await db.SaveChangesAsync();
+
+    // Clear cache when new work is created
+    await cache.RemoveAsync("all_works");
+    Console.WriteLine("🗑️ Cache cleared!");
+
     return Results.Created($"/api/works/{work.Id}", work);
 });
 

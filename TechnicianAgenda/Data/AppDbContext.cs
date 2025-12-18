@@ -13,20 +13,26 @@ namespace TechnicianAgenda.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Direction -> Client relationship
             modelBuilder.Entity<Direction>()
                 .HasOne(d => d.Client)
                 .WithMany(c => c.Directions)
-                .HasForeignKey(d => d.ClientId);
+                .HasForeignKey(d => d.ClientId)
+                .OnDelete(DeleteBehavior.Restrict); // Changed this
 
+            // Work -> Client relationship
             modelBuilder.Entity<Work>()
                 .HasOne(w => w.Client)
                 .WithMany()
-                .HasForeignKey(w => w.ClientId);
+                .HasForeignKey(w => w.ClientId)
+                .OnDelete(DeleteBehavior.Restrict); // Changed this
 
+            // Work -> Direction relationship
             modelBuilder.Entity<Work>()
                 .HasOne(w => w.Direction)
                 .WithMany()
-                .HasForeignKey(w => w.DirectionId);
+                .HasForeignKey(w => w.DirectionId)
+                .OnDelete(DeleteBehavior.Restrict); // Changed this
         }
     }
 }

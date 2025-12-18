@@ -12,7 +12,7 @@ using TechnicianAgenda.Data;
 namespace TechnicianAgenda.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251214043551_InitialCreate")]
+    [Migration("20251218023954_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -102,7 +102,7 @@ namespace TechnicianAgenda.Migrations
                     b.HasOne("TechnicianAgenda.Models.Client", "Client")
                         .WithMany("Directions")
                         .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Client");
@@ -113,13 +113,13 @@ namespace TechnicianAgenda.Migrations
                     b.HasOne("TechnicianAgenda.Models.Client", "Client")
                         .WithMany()
                         .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("TechnicianAgenda.Models.Direction", "Direction")
                         .WithMany()
                         .HasForeignKey("DirectionId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Client");
