@@ -361,3 +361,15 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# React Frontend
+technician-agenda-ui/node_modules/
+technician-agenda-ui/build/
+technician-agenda-ui/.env
+technician-agenda-ui/.env.local
+technician-agenda-ui/.env.development.local
+technician-agenda-ui/.env.test.local
+technician-agenda-ui/.env.production.local
+technician-agenda-ui/npm-debug.log*
+technician-agenda-ui/yarn-debug.log*
+technician-agenda-ui/yarn-error.log*
