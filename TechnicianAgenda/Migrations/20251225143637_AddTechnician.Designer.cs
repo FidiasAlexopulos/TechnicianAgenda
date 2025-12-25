@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TechnicianAgenda.Data;
 
@@ -11,9 +12,11 @@ using TechnicianAgenda.Data;
 namespace TechnicianAgenda.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251225143637_AddTechnician")]
+    partial class AddTechnician
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -36,7 +39,7 @@ namespace TechnicianAgenda.Migrations
 
                     b.Property<string>("CorreoElectronico")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -47,8 +50,6 @@ namespace TechnicianAgenda.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CorreoElectronico");
 
                     b.ToTable("Clients");
                 });
@@ -157,7 +158,7 @@ namespace TechnicianAgenda.Migrations
 
                     b.Property<string>("CorreoElectronico")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Direccion")
                         .IsRequired()
@@ -192,16 +193,11 @@ namespace TechnicianAgenda.Migrations
 
                     b.Property<string>("RutOPasaporte")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CorreoElectronico");
-
-                    b.HasIndex("RutOPasaporte")
-                        .IsUnique();
-
-                    b.ToTable("Technicians");
+                    b.ToTable("Technician");
                 });
 
             modelBuilder.Entity("TechnicianAgenda.Models.Work", b =>
@@ -242,7 +238,6 @@ namespace TechnicianAgenda.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("PorPagarATecnico")
-                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("Status")
@@ -353,8 +348,7 @@ namespace TechnicianAgenda.Migrations
 
                     b.HasOne("TechnicianAgenda.Models.Technician", "Technician")
                         .WithMany("AssignedWorks")
-                        .HasForeignKey("TechnicianId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("TechnicianId");
 
                     b.Navigation("Client");
 

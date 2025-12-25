@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TechnicianAgenda.Data;
 
@@ -11,9 +12,11 @@ using TechnicianAgenda.Data;
 namespace TechnicianAgenda.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251224033603_AddPaymentAndFilesToWork")]
+    partial class AddPaymentAndFilesToWork
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -36,7 +39,7 @@ namespace TechnicianAgenda.Migrations
 
                     b.Property<string>("CorreoElectronico")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -47,8 +50,6 @@ namespace TechnicianAgenda.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CorreoElectronico");
 
                     b.ToTable("Clients");
                 });
@@ -135,75 +136,6 @@ namespace TechnicianAgenda.Migrations
                     b.ToTable("JobSubcategories");
                 });
 
-            modelBuilder.Entity("TechnicianAgenda.Models.Technician", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Apellidos")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Certificaciones")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Comuna")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CorreoElectronico")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Direccion")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("FechaNacimiento")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("FotografiaPath")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Nacionalidad")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Nombre")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("NumeroTelefonico")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("NumeroTelefonicoAlternativo")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PatenteVehiculo")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("Region")
-                        .HasColumnType("int");
-
-                    b.Property<string>("RutOPasaporte")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CorreoElectronico");
-
-                    b.HasIndex("RutOPasaporte")
-                        .IsUnique();
-
-                    b.ToTable("Technicians");
-                });
-
             modelBuilder.Entity("TechnicianAgenda.Models.Work", b =>
                 {
                     b.Property<int>("Id")
@@ -235,21 +167,11 @@ namespace TechnicianAgenda.Migrations
                     b.Property<int>("JobSubcategoryId")
                         .HasColumnType("int");
 
-                    b.Property<bool>("PagoATecnicoRealizado")
-                        .HasColumnType("bit");
-
                     b.Property<int>("PaymentStatus")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("PorPagarATecnico")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<bool>("Status")
                         .HasColumnType("bit");
-
-                    b.Property<int?>("TechnicianId")
-                        .HasColumnType("int");
 
                     b.Property<decimal>("TotalACobrar")
                         .HasPrecision(18, 2)
@@ -264,8 +186,6 @@ namespace TechnicianAgenda.Migrations
                     b.HasIndex("JobCategoryId");
 
                     b.HasIndex("JobSubcategoryId");
-
-                    b.HasIndex("TechnicianId");
 
                     b.ToTable("Works");
                 });
@@ -351,11 +271,6 @@ namespace TechnicianAgenda.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("TechnicianAgenda.Models.Technician", "Technician")
-                        .WithMany("AssignedWorks")
-                        .HasForeignKey("TechnicianId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("Client");
 
                     b.Navigation("Direction");
@@ -363,8 +278,6 @@ namespace TechnicianAgenda.Migrations
                     b.Navigation("JobCategory");
 
                     b.Navigation("JobSubcategory");
-
-                    b.Navigation("Technician");
                 });
 
             modelBuilder.Entity("TechnicianAgenda.Models.WorkFile", b =>
@@ -386,11 +299,6 @@ namespace TechnicianAgenda.Migrations
             modelBuilder.Entity("TechnicianAgenda.Models.JobCategory", b =>
                 {
                     b.Navigation("Subcategories");
-                });
-
-            modelBuilder.Entity("TechnicianAgenda.Models.Technician", b =>
-                {
-                    b.Navigation("AssignedWorks");
                 });
 
             modelBuilder.Entity("TechnicianAgenda.Models.Work", b =>

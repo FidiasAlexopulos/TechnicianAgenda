@@ -1,0 +1,75 @@
+# docker-compose.yml - Para desarrollo local completo
+version: '3.8'
+
+services:
+  # SQL Server
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: technician-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    networks:
+      - technician-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: technician-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - technician-network
+    command: redis-server --appendonly yes
+
+  # Backend .NET API
+  backend:
+    build:
+      context: ./TechnicianAgenda
+      dockerfile: Dockerfile
+    container_name: technician-backend
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:443;http://+:80
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=TechnicianAgendaDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True
+      - Redis__ConnectionString=redis:6379
+    ports:
+      - "7054:443"
+      - "5215:80"
+    depends_on:
+      - sqlserver
+      - redis
+    networks:
+      - technician-network
+    volumes:
+      - ./TechnicianAgenda/wwwroot/uploads:/app/wwwroot/uploads
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./technician-agenda-ui
+      dockerfile: Dockerfile
+    container_name: technician-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - technician-network
+    environment:
+      - REACT_APP_API_URL=https://localhost:7054/api
+
+volumes:
+  sqlserver-data:
+  redis-data:
+
+networks:
+  technician-network:
+    driver: bridge
