@@ -715,8 +715,7 @@ app.MapDelete("/api/files/{fileId}", async (int fileId, AppDbContext db, IDistri
 // SEED DATA
 // ============================================
 
-if (app.Environment.IsDevelopment())
-{
+
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -902,6 +901,6 @@ if (app.Environment.IsDevelopment())
 
         Console.WriteLine("✅ Job categories seeded successfully!");
     }
-}
+
 
 app.Run();
