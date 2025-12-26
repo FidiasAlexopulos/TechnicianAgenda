@@ -24,8 +24,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Add Redis caching
 builder.Services.AddStackExchangeRedisCache(options =>
 {
-    options.Configuration = "localhost:6379";
-    options.InstanceName = "TechnicianAgenda_";
+    options.Configuration = builder.Configuration.GetValue<string>("Redis:ConnectionString")
+        ?? "localhost:6379"; // fallback para desarrollo local
 });
 
 // Add CORS for React app
@@ -43,11 +43,10 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
+
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+
 
 app.UseHttpsRedirection();
 app.UseCors("AllowReactApp");
