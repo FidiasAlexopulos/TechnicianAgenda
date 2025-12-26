@@ -1,0 +1,6 @@
+﻿**/.git
+**/node_modules
+**/bin
+**/obj
+**/.vs
+**/aws-publish
