@@ -52,9 +52,13 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowReactApp",
         policy =>
         {
-            policy.WithOrigins("http://localhost:3000")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+            policy.WithOrigins(
+                "http://localhost:3000",
+                "https://technician-agenda.vercel.app",
+                "https://technician-agenda-git-main-fidias-projects-347e50da.vercel.app"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
         });
 });
 
