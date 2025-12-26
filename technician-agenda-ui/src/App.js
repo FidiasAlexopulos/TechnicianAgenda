@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = 'https://localhost:7054/api';
+const API_URL = 'https://technicianagenda-production.up.railway.app';
 
 function App() {
     const [clients, setClients] = useState([]);
