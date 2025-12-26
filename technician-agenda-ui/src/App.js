@@ -89,7 +89,7 @@ function App() {
 
     const loadClients = async () => {
         try {
-            const response = await axios.get(`${API_URL}/clients`);
+            const response = await axios.get(`${API_URL}/api/clients`);
             setClients(response.data);
         } catch (error) {
             console.error('Error loading clients:', error);
@@ -98,7 +98,7 @@ function App() {
 
     const loadDirections = async (clientId) => {
         try {
-            const response = await axios.get(`${API_URL}/clients/${clientId}/directions`);
+            const response = await axios.get(`${API_URL}/api/clients/${clientId}/directions`);
             setDirections(response.data);
         } catch (error) {
             console.error('Error loading directions:', error);
@@ -107,7 +107,7 @@ function App() {
 
     const loadWorks = async () => {
         try {
-            const response = await axios.get(`${API_URL}/works`);
+            const response = await axios.get(`${API_URL}/api/works`);
             setWorks(response.data);
         } catch (error) {
             console.error('Error loading works:', error);
@@ -116,7 +116,7 @@ function App() {
 
     const loadJobCategories = async () => {
         try {
-            const response = await axios.get(`${API_URL}/jobcategories`);
+            const response = await axios.get(`${API_URL}/api/jobcategories`);
             setJobCategories(response.data);
         } catch (error) {
             console.error('Error loading job categories:', error);
@@ -125,7 +125,7 @@ function App() {
 
     const loadJobSubcategories = async (categoryId) => {
         try {
-            const response = await axios.get(`${API_URL}/jobcategories/${categoryId}/subcategories`);
+            const response = await axios.get(`${API_URL}/api/jobcategories/${categoryId}/subcategories`);
             setJobSubcategories(response.data);
         } catch (error) {
             console.error('Error loading subcategories:', error);
@@ -134,7 +134,7 @@ function App() {
 
     const loadRegions = async () => {
         try {
-            const response = await axios.get(`${API_URL}/regions`);
+            const response = await axios.get(`${API_URL}/api/regions`);
             setRegions(response.data);
         } catch (error) {
             console.error('Error loading regions:', error);
@@ -143,7 +143,7 @@ function App() {
 
     const loadComunas = async (regionId) => {
         try {
-            const response = await axios.get(`${API_URL}/regions/${regionId}/comunas`);
+            const response = await axios.get(`${API_URL}/api/regions/${regionId}/comunas`);
             setComunas(response.data);
         } catch (error) {
             console.error('Error loading comunas:', error);
@@ -152,7 +152,7 @@ function App() {
 
     const loadTechnicians = async () => {
         try {
-            const response = await axios.get(`${API_URL}/technicians`);
+            const response = await axios.get(`${API_URL}/api/technicians`);
             setTechnicians(response.data);
         } catch (error) {
             console.error('Error loading technicians:', error);
@@ -163,7 +163,7 @@ function App() {
     const createClient = async (e) => {
         e.preventDefault();
         try {
-            await axios.post(`${API_URL}/clients`, newClient);
+            await axios.post(`${API_URL}/api/clients`, newClient);
             setNewClient({ name: '', apellidos: '', telefono: '', correoElectronico: '' });
             loadClients();
             alert('Cliente creado exitosamente!');
@@ -175,7 +175,7 @@ function App() {
     const createDirection = async (e) => {
         e.preventDefault();
         try {
-            await axios.post(`${API_URL}/directions`, {
+            await axios.post(`${API_URL}/api/directions`, {
                 ...newDirection,
                 clientId: parseInt(newDirection.clientId),
                 region: parseInt(newDirection.region)
@@ -192,7 +192,7 @@ function App() {
     const createWork = async (e) => {
         e.preventDefault();
         try {
-            const response = await axios.post(`${API_URL}/works`, {
+            const response = await axios.post(`${API_URL}/api/works`, {
                 jobCategoryId: parseInt(newWork.jobCategoryId),
                 jobSubcategoryId: parseInt(newWork.jobSubcategoryId),
                 detalles: newWork.detalles,
@@ -254,7 +254,7 @@ function App() {
                 formData.append('photo', selectedPhoto);
             }
 
-            await axios.post(`${API_URL}/technicians`, formData, {
+            await axios.post(`${API_URL}/api/technicians`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
@@ -299,7 +299,7 @@ function App() {
                 formData.append('photo', selectedPhoto);
             }
 
-            await axios.put(`${API_URL}/technicians/${editingTechnician.id}`, formData, {
+            await axios.put(`${API_URL}/api/technicians/${editingTechnician.id}`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
@@ -321,7 +321,7 @@ function App() {
         });
 
         try {
-            await axios.post(`${API_URL}/works/${workId}/files`, formData, {
+            await axios.post(`${API_URL}/api/works/${workId}/files`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
@@ -334,7 +334,7 @@ function App() {
     const updateWork = async (e) => {
         e.preventDefault();
         try {
-            await axios.put(`${API_URL}/works/${editingWork.id}`, editingWork);
+            await axios.put(`${API_URL}/api/works/${editingWork.id}`, editingWork);
 
             // Upload new files if any
             if (selectedFiles.length > 0) {
@@ -352,7 +352,7 @@ function App() {
 
     const toggleWorkStatus = async (workId, currentStatus) => {
         try {
-            await axios.patch(`${API_URL}/works/${workId}/status?status=${!currentStatus}`);
+            await axios.patch(`${API_URL}/api/works/${workId}/status?status=${!currentStatus}`);
             loadWorks();
         } catch (error) {
             alert('Error al actualizar estado');
@@ -361,7 +361,7 @@ function App() {
 
     const toggleTechnicianPayment = async (workId, currentStatus) => {
         try {
-            await axios.patch(`${API_URL}/works/${workId}/technician-payment?paid=${!currentStatus}`);
+            await axios.patch(`${API_URL}/api/works/${workId}/technician-payment?paid=${!currentStatus}`);
             loadWorks();
         } catch (error) {
             alert('Error al actualizar pago a técnico');
@@ -372,10 +372,10 @@ function App() {
         if (!window.confirm('¿Eliminar este archivo?')) return;
 
         try {
-            await axios.delete(`${API_URL}/files/${fileId}`);
+            await axios.delete(`${API_URL}/api/files/${fileId}`);
             loadWorks();
             if (editingWork) {
-                const updatedWork = await axios.get(`${API_URL}/works/${editingWork.id}`);
+                const updatedWork = await axios.get(`${API_URL}/api/works/${editingWork.id}`);
                 setEditingWork(updatedWork.data);
             }
         } catch (error) {
@@ -722,13 +722,13 @@ function App() {
                                                     <div key={file.id} className="relative">
                                                         {file.fileType === 'image' ? (
                                                             <img
-                                                                src={`${API_URL}${file.filePath}`}
+                                                                src={`${API_URL}/api${file.filePath}`}
                                                                 alt={file.fileName}
                                                                 className="w-full h-24 object-cover rounded"
                                                             />
                                                         ) : (
                                                             <video
-                                                                src={`${API_URL}${file.filePath}`}
+                                                                src={`${API_URL}/api${file.filePath}`}
                                                                 className="w-full h-24 object-cover rounded"
                                                                 controls
                                                             />
@@ -859,14 +859,14 @@ function App() {
                                                                         <div key={file.id} className="flex-shrink-0">
                                                                             {file.fileType === 'image' ? (
                                                                                 <img
-                                                                                    src={`${API_URL}${file.filePath}`}
+                                                                                    src={`${API_URL}/api${file.filePath}`}
                                                                                     alt={file.fileName}
                                                                                     className="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-80"
-                                                                                    onClick={() => window.open(`${API_URL}${file.filePath}`, '_blank')}
+                                                                                    onClick={() => window.open(`${API_URL}/api${file.filePath}`, '_blank')}
                                                                                 />
                                                                             ) : (
                                                                                 <video
-                                                                                    src={`${API_URL}${file.filePath}`}
+                                                                                    src={`${API_URL}/api${file.filePath}`}
                                                                                     className="w-20 h-20 object-cover rounded"
                                                                                     controls
                                                                                 />
@@ -1222,7 +1222,7 @@ function App() {
                                     <div key={tech.id} className="border border-gray-200 rounded-lg p-4">
                                         {tech.fotografiaPath && (
                                             <img
-                                                src={`${API_URL}${tech.fotografiaPath}`}
+                                                src={`${API_URL}/api${tech.fotografiaPath}`}
                                                 alt={`${tech.nombre} ${tech.apellidos}`}
                                                 className="w-20 h-20 rounded-full object-cover mx-auto mb-3"
                                             />
