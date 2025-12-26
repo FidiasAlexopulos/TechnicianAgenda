@@ -21,12 +21,30 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Add Redis caching
-builder.Services.AddStackExchangeRedisCache(options =>
+// Add caching - Usa Redis si está disponible, sino usa memoria
+var redisConnection = builder.Configuration.GetValue<string>("Redis:ConnectionString");
+if (!string.IsNullOrEmpty(redisConnection) && redisConnection != "localhost:6379")
 {
-    options.Configuration = builder.Configuration.GetValue<string>("Redis:ConnectionString")
-        ?? "localhost:6379"; // fallback para desarrollo local
-});
+    try
+    {
+        builder.Services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnection;
+            options.InstanceName = "TechnicianAgenda_";
+        });
+        Console.WriteLine("✅ Using Redis cache");
+    }
+    catch
+    {
+        builder.Services.AddDistributedMemoryCache();
+        Console.WriteLine("⚠️ Redis failed, using memory cache");
+    }
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+    Console.WriteLine("ℹ️ Using memory cache (no Redis configured)");
+}
 
 // Add CORS for React app
 builder.Services.AddCors(options =>
