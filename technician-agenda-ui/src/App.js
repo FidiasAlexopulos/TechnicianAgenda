@@ -722,13 +722,13 @@ function App() {
                                                     <div key={file.id} className="relative">
                                                         {file.fileType === 'image' ? (
                                                             <img
-                                                                src={`https://localhost:7054${file.filePath}`}
+                                                                src={`${API_URL}${file.filePath}`}
                                                                 alt={file.fileName}
                                                                 className="w-full h-24 object-cover rounded"
                                                             />
                                                         ) : (
                                                             <video
-                                                                src={`https://localhost:7054${file.filePath}`}
+                                                                src={`${API_URL}${file.filePath}`}
                                                                 className="w-full h-24 object-cover rounded"
                                                                 controls
                                                             />
@@ -859,14 +859,14 @@ function App() {
                                                                         <div key={file.id} className="flex-shrink-0">
                                                                             {file.fileType === 'image' ? (
                                                                                 <img
-                                                                                    src={`https://localhost:7054${file.filePath}`}
+                                                                                    src={`${API_URL}${file.filePath}`}
                                                                                     alt={file.fileName}
                                                                                     className="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-80"
-                                                                                    onClick={() => window.open(`https://localhost:7054${file.filePath}`, '_blank')}
+                                                                                    onClick={() => window.open(`${API_URL}${file.filePath}`, '_blank')}
                                                                                 />
                                                                             ) : (
                                                                                 <video
-                                                                                    src={`https://localhost:7054${file.filePath}`}
+                                                                                    src={`${API_URL}${file.filePath}`}
                                                                                     className="w-20 h-20 object-cover rounded"
                                                                                     controls
                                                                                 />
@@ -1222,7 +1222,7 @@ function App() {
                                     <div key={tech.id} className="border border-gray-200 rounded-lg p-4">
                                         {tech.fotografiaPath && (
                                             <img
-                                                src={`https://localhost:7054${tech.fotografiaPath}`}
+                                                src={`${API_URL}${tech.fotografiaPath}`}
                                                 alt={`${tech.nombre} ${tech.apellidos}`}
                                                 className="w-20 h-20 rounded-full object-cover mx-auto mb-3"
                                             />
