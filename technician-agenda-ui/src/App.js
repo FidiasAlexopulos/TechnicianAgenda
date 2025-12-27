@@ -1,4 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import { useAuth } from './AuthContext';
+import Login from './Login';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const API_URL = 'https://technicianagenda-production.up.railway.app';
@@ -16,6 +18,7 @@ function App() {
     const [editingWork, setEditingWork] = useState(null);
     const [editingTechnician, setEditingTechnician] = useState(null);
 
+    
     // Form states
     const [newClient, setNewClient] = useState({
         name: '',
@@ -63,6 +66,8 @@ function App() {
         certificaciones: ''
     });
 
+ 
+
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [selectedPhoto, setSelectedPhoto] = useState(null);
 
@@ -78,14 +83,9 @@ function App() {
         2: 'bg-yellow-100 text-yellow-800'
     };
 
-    // Load initial data
-    useEffect(() => {
-        loadClients();
-        loadWorks();
-        loadJobCategories();
-        loadRegions();
-        loadTechnicians();
-    }, []);
+    const { token, loading, logout, user } = useAuth();
+
+              
 
     const loadClients = async () => {
         try {
@@ -437,6 +437,28 @@ function App() {
         }
     };
 
+    // Load initial data
+    useEffect(() => {
+        if (token) {
+            loadClients();
+            loadWorks();
+            loadJobCategories();
+            loadRegions();
+            loadTechnicians();
+        }
+    }, [token]);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-xl">Cargando...</div>
+            </div>
+        );
+    }
+    if (!token) {     // Si no hay token, mostrar Login
+        return <Login />;
+    }
+
     return (
         <div className="min-h-screen bg-gray-50">
             <header className="bg-blue-600 text-white shadow-lg">
@@ -463,6 +485,23 @@ function App() {
                                         tab === 'clients' ? 'Clientes' : 'Direcciones'}
                             </button>
                         ))}
+                    </div>
+                </div>
+            </div>
+            <div className="bg-blue-600 text-white p-6">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h1 className="text-3xl font-bold">🔧 Agenda de Técnicos</h1>
+                        <p className="text-blue-100">Gestiona tus órdenes de trabajo y técnicos</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <span>👤 {user?.fullName}</span>
+                        <button
+                            onClick={logout}
+                            className="bg-red-500 px-4 py-2 rounded hover:bg-red-600"
+                        >
+                            Cerrar Sesión
+                        </button>
                     </div>
                 </div>
             </div>
