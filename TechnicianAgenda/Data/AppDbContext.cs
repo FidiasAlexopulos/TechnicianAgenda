@@ -14,6 +14,8 @@ namespace TechnicianAgenda.Data
         public DbSet<JobSubcategory> JobSubcategories { get; set; }
         public DbSet<WorkFile> WorkFiles { get; set; }
         public DbSet<Technician> Technicians { get; set; } // NUEVO
+        public DbSet<User> Users { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

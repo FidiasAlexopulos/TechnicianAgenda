@@ -1,8 +1,13 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using System.Text.Json;
 using TechnicianAgenda.Data;
 using TechnicianAgenda.Models;
-using Microsoft.Extensions.Caching.Distributed;
-using System.Text.Json;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +25,34 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 // Add database
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Add JWT Authentication
+var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not configured");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+    };
+});
+
+builder.Services.AddAuthorization();
+
+
 
 // Add caching - Usa Redis si está disponible, sino usa memoria
 var redisConnection = builder.Configuration.GetValue<string>("Redis:ConnectionString");
@@ -50,28 +83,33 @@ else
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
-        policy =>
-        {
+                policy =>
+            {
             policy.WithOrigins(
                 "http://localhost:3000",
                 "https://technician-agenda.vercel.app",
                 "https://technician-agenda-git-main-fidias-projects-347e50da.vercel.app"
             )
-            .AllowAnyHeader()
+                            .AllowAnyHeader()
             .AllowAnyMethod();
         });
 });
 
+
 var app = builder.Build();
+
+
 
 // Configure the HTTP request pipeline
 
-    app.UseSwagger();
+app.UseSwagger();
     app.UseSwaggerUI();
 
 
 app.UseHttpsRedirection();
 app.UseCors("AllowReactApp");
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Create uploads directory if it doesn't exist
 var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
@@ -80,6 +118,107 @@ if (!Directory.Exists(uploadsPath))
     Directory.CreateDirectory(uploadsPath);
 }
 app.UseStaticFiles(); // Serve static files from wwwroot
+
+// ============================================
+// AUTHENTICATION ENDPOINTS
+// ============================================
+
+app.MapPost("/api/auth/register", async (RegisterRequest request, AppDbContext db) =>
+{
+    // Validar que el username no exista
+    if (await db.Users.AnyAsync(u => u.Username == request.Username))
+    {
+        return Results.BadRequest(new { message = "El nombre de usuario ya existe" });
+    }
+
+    // Validar que el email no exista
+    if (await db.Users.AnyAsync(u => u.Email == request.Email))
+    {
+        return Results.BadRequest(new { message = "El email ya está registrado" });
+    }
+
+    // Crear usuario
+    var user = new User
+    {
+        Username = request.Username,
+        Email = request.Email,
+        FullName = request.FullName,
+        PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+        CreatedAt = DateTime.UtcNow,
+        IsActive = true
+    };
+
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+
+    // Generar token
+    var token = GenerateJwtToken(user);
+
+    return Results.Ok(new AuthResponse
+    {
+        Token = token,
+        Username = user.Username,
+        Email = user.Email,
+        FullName = user.FullName
+    });
+});
+
+app.MapPost("/api/auth/login", async (LoginRequest request, AppDbContext db) =>
+{
+    // Buscar usuario
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+
+    if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!user.IsActive)
+    {
+        return Results.BadRequest(new { message = "Usuario inactivo" });
+    }
+
+    // Generar token
+    var token = GenerateJwtToken(user);
+
+    return Results.Ok(new AuthResponse
+    {
+        Token = token,
+        Username = user.Username,
+        Email = user.Email,
+        FullName = user.FullName
+    });
+});
+
+// Función helper para generar JWT
+string GenerateJwtToken(User user)
+{
+    var jwtKey = builder.Configuration["Jwt:Key"]!;
+    var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+    var jwtAudience = builder.Configuration["Jwt:Audience"];
+    var expirationHours = double.Parse(builder.Configuration["Jwt:ExpirationInHours"] ?? "24");
+
+    var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+    var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+    var claims = new[]
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Name, user.Username),
+        new Claim(ClaimTypes.Email, user.Email),
+        new Claim("FullName", user.FullName)
+    };
+
+    var token = new JwtSecurityToken(
+        issuer: jwtIssuer,
+        audience: jwtAudience,
+        claims: claims,
+        expires: DateTime.UtcNow.AddHours(expirationHours),
+        signingCredentials: credentials
+    );
+
+    return new JwtSecurityTokenHandler().WriteToken(token);
+}
 
 // ============================================
 // CLIENT ENDPOINTS
