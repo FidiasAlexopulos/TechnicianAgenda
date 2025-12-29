@@ -1,8 +1,16 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.IdentityModel.Tokens;
+using System;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 using TechnicianAgenda.Data;
 using TechnicianAgenda.Models;
-using Microsoft.Extensions.Caching.Distributed;
-using System.Text.Json;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,36 +29,88 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Add Redis caching
-builder.Services.AddStackExchangeRedisCache(options =>
+// Add JWT Authentication
+var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not configured");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
+
+builder.Services.AddAuthentication(options =>
 {
-    options.Configuration = "localhost:6379";
-    options.InstanceName = "TechnicianAgenda_";
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+    };
 });
+
+builder.Services.AddAuthorization();
+
+
+
+// Add caching - Usa Redis si está disponible, sino usa memoria
+var redisConnection = builder.Configuration.GetValue<string>("Redis:ConnectionString");
+if (!string.IsNullOrEmpty(redisConnection) && redisConnection != "localhost:6379")
+{
+    try
+    {
+        builder.Services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnection;
+            options.InstanceName = "TechnicianAgenda_";
+        });
+        Console.WriteLine("✅ Using Redis cache");
+    }
+    catch
+    {
+        builder.Services.AddDistributedMemoryCache();
+        Console.WriteLine("⚠️ Redis failed, using memory cache");
+    }
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+    Console.WriteLine("ℹ️ Using memory cache (no Redis configured)");
+}
 
 // Add CORS for React app
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
-        policy =>
-        {
-            policy.WithOrigins("http://localhost:3000")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod();
+                policy =>
+            {
+            policy.WithOrigins(
+                "http://localhost:3000",
+                "https://technician-agenda.vercel.app",
+                "https://technician-agenda-git-main-fidias-projects-347e50da.vercel.app"
+            )
+                            .AllowAnyHeader()
+            .AllowAnyMethod();
         });
 });
 
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
 
+
+// Configure the HTTP request pipeline
+
+app.UseSwagger();
+app.UseSwaggerUI();
 app.UseHttpsRedirection();
 app.UseCors("AllowReactApp");
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Create uploads directory if it doesn't exist
 var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
@@ -61,36 +121,214 @@ if (!Directory.Exists(uploadsPath))
 app.UseStaticFiles(); // Serve static files from wwwroot
 
 // ============================================
+// AUTHENTICATION ENDPOINTS
+// ============================================
+
+app.MapPost("/api/auth/register", async (RegisterRequest request, AppDbContext db) =>
+{
+    // Validar que el username no exista
+    if (await db.Users.AnyAsync(u => u.Username == request.Username))
+    {
+        return Results.BadRequest(new { message = "El nombre de usuario ya existe" });
+    }
+
+    // Validar que el email no exista
+    if (await db.Users.AnyAsync(u => u.Email == request.Email))
+    {
+        return Results.BadRequest(new { message = "El email ya está registrado" });
+    }
+
+    // Crear usuario
+    var user = new User
+    {
+        Username = request.Username,
+        Email = request.Email,
+        FullName = request.FullName,
+        PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+        CreatedAt = DateTime.UtcNow,
+        IsActive = true
+    };
+
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+
+    // Generar token
+    var token = GenerateJwtToken(user);
+
+    return Results.Ok(new AuthResponse
+    {
+        Token = token,
+        Username = user.Username,
+        Email = user.Email,
+        FullName = user.FullName
+    });
+});
+
+app.MapPost("/api/auth/login", async (LoginRequest request, AppDbContext db) =>
+{
+    // Buscar usuario
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+
+    if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (!user.IsActive)
+    {
+        return Results.BadRequest(new { message = "Usuario inactivo" });
+    }
+
+    // Generar token
+    var token = GenerateJwtToken(user);
+
+    return Results.Ok(new AuthResponse
+    {
+        Token = token,
+        Username = user.Username,
+        Email = user.Email,
+        FullName = user.FullName
+    });
+});
+
+// Función helper para generar JWT
+string GenerateJwtToken(User user)
+{
+    var jwtKey = builder.Configuration["Jwt:Key"]!;
+    var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+    var jwtAudience = builder.Configuration["Jwt:Audience"];
+    var expirationHours = double.Parse(builder.Configuration["Jwt:ExpirationInHours"] ?? "24");
+
+    var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+    var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+    var claims = new[]
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Name, user.Username),
+        new Claim(ClaimTypes.Email, user.Email),
+        new Claim("FullName", user.FullName)
+    };
+
+    var token = new JwtSecurityToken(
+        issuer: jwtIssuer,
+        audience: jwtAudience,
+        claims: claims,
+        expires: DateTime.UtcNow.AddHours(expirationHours),
+        signingCredentials: credentials
+    );
+
+    return new JwtSecurityTokenHandler().WriteToken(token);
+}
+
+// ============================================
 // CLIENT ENDPOINTS
 // ============================================
 
-app.MapGet("/api/clients", async (AppDbContext db) =>
+app.MapGet("/api/clients", [Authorize] async (AppDbContext db, HttpContext context) =>
+
 {
-    var clients = await db.Clients.Include(c => c.Directions).ToListAsync();
+    var userId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+    var clients = await db.Clients
+     .Where(c => c.UserId == userId && c.IsActive)    // ← FILTRO CLAVE
+     .Include(c => c.Directions)
+     .ToListAsync();
+
     return Results.Ok(clients);
 });
-
-app.MapGet("/api/clients/{id}", async (int id, AppDbContext db) =>
+app.MapGet("/api/clients/{id}", [Authorize] async (int id, AppDbContext db, HttpContext context) =>
 {
+    var userId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+    // Buscar el cliente SOLO si pertenece al usuario autenticado
     var client = await db.Clients
+        .Where(c => c.UserId == userId && c.IsActive)  // ← Verificar propiedad
         .Include(c => c.Directions)
         .FirstOrDefaultAsync(c => c.Id == id);
 
     return client is not null ? Results.Ok(client) : Results.NotFound();
 });
-
-app.MapPost("/api/clients", async (Client client, AppDbContext db) =>
+app.MapPost("/api/clients", [Authorize] async (Client client, AppDbContext db, HttpContext context) =>
 {
+    var userId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+    // Asignar el cliente al usuario autenticado
+    client.UserId = userId;  // ← ASIGNACIÓN CLAVE
+
     db.Clients.Add(client);
     await db.SaveChangesAsync();
+
     return Results.Created($"/api/clients/{client.Id}", client);
+});
+app.MapPut("/api/clients/{id}", [Authorize] async (int id, Client updatedClient, AppDbContext db, HttpContext context) =>
+{
+    var userId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+    // Buscar el cliente SOLO si pertenece al usuario
+    var client = await db.Clients
+        .Where(c => c.UserId == userId)
+        .FirstOrDefaultAsync(c => c.Id == id);
+
+    if (client is null)
+    {
+        return Results.NotFound();
+    }
+
+    // Actualizar campos
+    client.Name = updatedClient.Name;
+    client.Apellidos = updatedClient.Apellidos;
+    client.Telefono = updatedClient.Telefono;
+    client.CorreoElectronico = updatedClient.CorreoElectronico;
+    // NO actualizar UserId - debe permanecer igual
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(client);
+});
+app.MapDelete("/api/clients/{id}", [Authorize] async (int id, AppDbContext db, HttpContext context) =>
+{
+    var userId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+    // Buscar el cliente SOLO si pertenece al usuario
+    var client = await db.Clients
+        .Where(c => c.UserId == userId)
+        .FirstOrDefaultAsync(c => c.Id == id);
+
+    if (client is null)
+    {
+        return Results.NotFound();
+    }
+
+    client.IsActive = false;
+    await db.SaveChangesAsync();
+
+    return Results.NoContent();  // 204 No Content = eliminado exitosamente
+});
+app.MapPatch("/api/clients/{id}/restore", [Authorize] async (int id, AppDbContext db, HttpContext context) =>
+{
+    var userId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+    var client = await db.Clients
+        .Where(c => c.UserId == userId && !c.IsActive)  // Solo inactivos
+        .FirstOrDefaultAsync(c => c.Id == id);
+
+    if (client is null)
+    {
+        return Results.NotFound();
+    }
+
+    client.IsActive = true;  // Restaurar
+    await db.SaveChangesAsync();
+
+    return Results.Ok(client);
 });
 
 // ============================================
 // DIRECTION ENDPOINTS
 // ============================================
 
-app.MapGet("/api/clients/{clientId}/directions", async (int clientId, AppDbContext db) =>
+app.MapGet("/api/clients/{clientId}/directions", [Authorize] async (int clientId, AppDbContext db) =>
 {
     var directions = await db.Directions
         .Where(d => d.ClientId == clientId)
@@ -99,7 +337,7 @@ app.MapGet("/api/clients/{clientId}/directions", async (int clientId, AppDbConte
     return Results.Ok(directions);
 });
 
-app.MapPost("/api/directions", async (Direction direction, AppDbContext db) =>
+app.MapPost("/api/directions", [Authorize] async (Direction direction, AppDbContext db) =>
 {
     var clientExists = await db.Clients.AnyAsync(c => c.Id == direction.ClientId);
     if (!clientExists)
@@ -144,7 +382,7 @@ app.MapGet("/api/regions/{regionId}/comunas", (int regionId) =>
 // TECHNICIAN ENDPOINTS
 // ============================================
 
-app.MapGet("/api/technicians", async (AppDbContext db) =>
+app.MapGet("/api/technicians", [Authorize] async (AppDbContext db) =>
 {
     var technicians = await db.Technicians
         .OrderBy(t => t.Apellidos)
@@ -154,7 +392,7 @@ app.MapGet("/api/technicians", async (AppDbContext db) =>
     return Results.Ok(technicians);
 });
 
-app.MapGet("/api/technicians/{id}", async (int id, AppDbContext db) =>
+app.MapGet("/api/technicians/{id}", [Authorize] async (int id, AppDbContext db) =>
 {
     var technician = await db.Technicians
         .Include(t => t.AssignedWorks)
@@ -163,7 +401,7 @@ app.MapGet("/api/technicians/{id}", async (int id, AppDbContext db) =>
     return technician is not null ? Results.Ok(technician) : Results.NotFound();
 });
 
-app.MapPost("/api/technicians", async (HttpRequest request, AppDbContext db) =>
+app.MapPost("/api/technicians", [Authorize] async (HttpRequest request, AppDbContext db) =>
 {
     try
     {
@@ -225,7 +463,7 @@ app.MapPost("/api/technicians", async (HttpRequest request, AppDbContext db) =>
     }
 });
 
-app.MapPut("/api/technicians/{id}", async (int id, HttpRequest request, AppDbContext db) =>
+app.MapPut("/api/technicians/{id}", [Authorize] async (int id, HttpRequest request, AppDbContext db) =>
 {
     try
     {
@@ -291,7 +529,7 @@ app.MapPut("/api/technicians/{id}", async (int id, HttpRequest request, AppDbCon
     }
 });
 
-app.MapDelete("/api/technicians/{id}", async (int id, AppDbContext db) =>
+app.MapDelete("/api/technicians/{id}", [Authorize] async (int id, AppDbContext db) =>
 {
     var technician = await db.Technicians.FindAsync(id);
     if (technician is null)
@@ -315,7 +553,7 @@ app.MapDelete("/api/technicians/{id}", async (int id, AppDbContext db) =>
 });
 
 // Get technicians summary for work assignment dropdown
-app.MapGet("/api/technicians/summary", async (AppDbContext db) =>
+app.MapGet("/api/technicians/summary", [Authorize] async (AppDbContext db) =>
 {
     var technicians = await db.Technicians
         .Select(t => new
@@ -363,7 +601,7 @@ app.MapGet("/api/jobcategories/{categoryId}/subcategories", async (int categoryI
 
 // REEMPLAZA tu endpoint GET /api/works actual con este:
 
-app.MapGet("/api/works", async (AppDbContext db, IDistributedCache cache) =>
+app.MapGet("/api/works", [Authorize] async (AppDbContext db, IDistributedCache cache) =>
 {
     var cacheKey = "all_works";
     var cachedWorks = await cache.GetStringAsync(cacheKey);
@@ -405,7 +643,7 @@ app.MapGet("/api/works", async (AppDbContext db, IDistributedCache cache) =>
     return Results.Ok(worksFromDb);
 });
 
-app.MapGet("/api/works/{id}", async (int id, AppDbContext db) =>
+app.MapGet("/api/works/{id}", [Authorize] async (int id, AppDbContext db) =>
 {
     var work = await db.Works
         .Include(w => w.Client)
@@ -419,7 +657,7 @@ app.MapGet("/api/works/{id}", async (int id, AppDbContext db) =>
     return work is not null ? Results.Ok(work) : Results.NotFound();
 });
 
-app.MapPost("/api/works", async (Work work, AppDbContext db, IDistributedCache cache) =>
+app.MapPost("/api/works", [Authorize] async (Work work, AppDbContext db, IDistributedCache cache) =>
 {
     try
     {
@@ -482,7 +720,7 @@ app.MapPost("/api/works", async (Work work, AppDbContext db, IDistributedCache c
     }
 });
 
-app.MapPut("/api/works/{id}", async (int id, Work updatedWork, AppDbContext db, IDistributedCache cache) =>
+app.MapPut("/api/works/{id}", [Authorize] async (int id, Work updatedWork, AppDbContext db, IDistributedCache cache) =>
 {
     var work = await db.Works.FindAsync(id);
     if (work is null)
@@ -542,7 +780,7 @@ app.MapPut("/api/works/{id}", async (int id, Work updatedWork, AppDbContext db, 
     return Results.Ok(work);
 });
 
-app.MapPatch("/api/works/{id}/status", async (int id, bool status, AppDbContext db, IDistributedCache cache) =>
+app.MapPatch("/api/works/{id}/status", [Authorize] async (int id, bool status, AppDbContext db, IDistributedCache cache) =>
 {
     var work = await db.Works.FindAsync(id);
     if (work is null)
@@ -557,8 +795,7 @@ app.MapPatch("/api/works/{id}/status", async (int id, bool status, AppDbContext 
     return Results.Ok(work);
 });
 
-// NUEVO: Toggle para pago a técnico
-app.MapPatch("/api/works/{id}/technician-payment", async (int id, bool paid, AppDbContext db, IDistributedCache cache) =>
+app.MapPatch("/api/works/{id}/technician-payment", [Authorize] async (int id, bool paid, AppDbContext db, IDistributedCache cache) =>
 {
     var work = await db.Works.FindAsync(id);
     if (work is null)
@@ -573,7 +810,7 @@ app.MapPatch("/api/works/{id}/technician-payment", async (int id, bool paid, App
     return Results.Ok(work);
 });
 
-app.MapDelete("/api/works/{id}", async (int id, AppDbContext db, IDistributedCache cache) =>
+app.MapDelete("/api/works/{id}", [Authorize] async (int id, AppDbContext db, IDistributedCache cache) =>
 {
     var work = await db.Works.Include(w => w.Files).FirstOrDefaultAsync(w => w.Id == id);
     if (work is null)
@@ -602,7 +839,7 @@ app.MapDelete("/api/works/{id}", async (int id, AppDbContext db, IDistributedCac
 // FILE UPLOAD ENDPOINTS
 // ============================================
 
-app.MapPost("/api/works/{workId}/files", async (int workId, HttpRequest request, AppDbContext db, IDistributedCache cache) =>
+app.MapPost("/api/works/{workId}/files", [Authorize] async (int workId, HttpRequest request, AppDbContext db, IDistributedCache cache) =>
 {
     var work = await db.Works.FindAsync(workId);
     if (work is null)
@@ -659,7 +896,7 @@ app.MapPost("/api/works/{workId}/files", async (int workId, HttpRequest request,
     return Results.Ok(uploadedFiles);
 });
 
-app.MapGet("/api/works/{workId}/files", async (int workId, AppDbContext db) =>
+app.MapGet("/api/works/{workId}/files", [Authorize] async (int workId, AppDbContext db) =>
 {
     var files = await db.WorkFiles
         .Where(f => f.WorkId == workId)
@@ -668,7 +905,7 @@ app.MapGet("/api/works/{workId}/files", async (int workId, AppDbContext db) =>
     return Results.Ok(files);
 });
 
-app.MapDelete("/api/files/{fileId}", async (int fileId, AppDbContext db, IDistributedCache cache) =>
+app.MapDelete("/api/files/{fileId}", [Authorize] async (int fileId, AppDbContext db, IDistributedCache cache) =>
 {
     var file = await db.WorkFiles.FindAsync(fileId);
     if (file is null)
@@ -694,8 +931,7 @@ app.MapDelete("/api/files/{fileId}", async (int fileId, AppDbContext db, IDistri
 // SEED DATA
 // ============================================
 
-if (app.Environment.IsDevelopment())
-{
+
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -881,6 +1117,6 @@ if (app.Environment.IsDevelopment())
 
         Console.WriteLine("✅ Job categories seeded successfully!");
     }
-}
+
 
 app.Run();

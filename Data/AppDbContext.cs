@@ -14,6 +14,8 @@ namespace TechnicianAgenda.Data
         public DbSet<JobSubcategory> JobSubcategories { get; set; }
         public DbSet<WorkFile> WorkFiles { get; set; }
         public DbSet<Technician> Technicians { get; set; } // NUEVO
+        public DbSet<User> Users { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -26,7 +28,7 @@ namespace TechnicianAgenda.Data
 
             modelBuilder.Entity<Work>()
                 .HasOne(w => w.Client)
-                .WithMany()
+                .WithMany(c => c.Works)
                 .HasForeignKey(w => w.ClientId)
                 .OnDelete(DeleteBehavior.Restrict);
 
@@ -93,6 +95,27 @@ namespace TechnicianAgenda.Data
 
             modelBuilder.Entity<Client>()
                 .HasIndex(c => c.CorreoElectronico);
+
+            modelBuilder.Entity<Client>()
+                .HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<Work>()
+                .HasOne(w => w.User)
+                .WithMany()
+                .HasForeignKey(w => w.UserId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<Technician>()
+                .HasOne(t => t.User)
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+
+
         }
     }
 }

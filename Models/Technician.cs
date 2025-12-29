@@ -3,18 +3,12 @@
     public class Technician
     {
         public int Id { get; set; }
-
-        // Personal Information
         public string Nombre { get; set; } = string.Empty;
         public string Apellidos { get; set; } = string.Empty;
         public string Nacionalidad { get; set; } = string.Empty;
         public string RutOPasaporte { get; set; } = string.Empty;
         public DateTime FechaNacimiento { get; set; }
-
-        // Photo
         public string? FotografiaPath { get; set; } = string.Empty;
-
-        // Address
         public Region Region { get; set; }
         public string Comuna { get; set; } = string.Empty;
         public string Direccion { get; set; } = string.Empty;
@@ -31,6 +25,10 @@
         public string Certificaciones { get; set; } = string.Empty;
 
         // Navigation property - trabajos asignados a este técnico
-        public List<Work> AssignedWorks { get; set; } = new();
+        public int UserId { get; set; }
+        public User User { get; set; } = null!;
+
+        // Navigation property - trabajos asignados a este técnico
+        public ICollection<Work> AssignedWorks { get; set; } = new List<Work>();
     }
 }

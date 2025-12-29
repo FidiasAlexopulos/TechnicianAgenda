@@ -1,0 +1,12 @@
+﻿.git/
+.vs/
+bin/
+obj/
+*.user
+*.suo
+node_modules/
+aws-publish/
+deploy-bundle.zip
+temp-verify/
+verify-zip/
+verify-eb/
